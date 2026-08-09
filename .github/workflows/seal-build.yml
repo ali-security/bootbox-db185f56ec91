@@ -1,0 +1,45 @@
+name: seal-build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build, test and pack (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["15"]
+    env:
+      # PhantomJS 2.1.1 aborts on OpenSSL 3 hosts while parsing the system
+      # openssl.cnf ("DSO_load: could not load the shared library").
+      OPENSSL_CONF: /dev/null
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build dist (grunt uglify + jshint)
+        run: npx grunt uglify jshint
+
+      - name: Test
+        run: npm test
+
+      - name: Restore the CRLF line endings the release was published with
+        run: perl -i -pe 's/\r?\n/\r\n/' package.json README.md CHANGELOG.md LICENSE.md bootbox.js bootbox.all.js bootbox.locales.js dist/bootbox.min.js dist/bootbox.locales.min.js dist/bootbox.all.min.js
+
+      - name: Pack
+        run: npm pack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball
+          path: bootbox-5.5.2.tgz
+          if-no-files-found: error
